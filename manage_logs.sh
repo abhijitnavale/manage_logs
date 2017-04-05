@@ -1,7 +1,7 @@
 #!/usr/bin/sh
 
-#LOG_FILE="mylogs.log"
-#exec 3>&1 1>>${LOG_FILE} 2>&1
+LOG_FILE="mylogs.log"
+exec 3>&1 1>>${LOG_FILE} 2>&1
 
 if [ ! -e managelogs.config ]; then
     echo "Configuration file not found"
@@ -18,8 +18,13 @@ line=$(head -n 1 managelogs.config)
 read -a arr <<<$line
 
 function send_deletion_email {
-    
+    mail -s "Log Files Deleted" $email <<< "$1 was deleted. Size was $2 which is greater than configured $3"
 }
+
+function manage_files_per_days {
+    find "$2" -mindepth 1 -mtime +"$3" -delete
+}
+
 function manage_files_per_size {
     for filename in "$2"*; do
         filesize=$(($( stat -c '%s' $filename) / 1024 / 1024 ))
@@ -28,8 +33,6 @@ function manage_files_per_size {
             echo "Deleting " $filename
             rm -f $filename
             send_deletion_email $filename $filesize $3
-        else
-            echo $filename "size is less than " $filesize
         fi
         
     done
@@ -39,13 +42,15 @@ function process_app_log {
     echo "Processing app log for" $1
     case $1 in
         "apache")
-            manage_files_per_size $1 "/var/log/abhijit/apache/" $apache_size
-            # manage_files_per_days
+            apache_dir = "/var/log/abhijit/apache"
+            manage_files_per_size $1 $apache_dir $apache_size
+            manage_files_per_days $1 $apache_dir $apache_days
             ;;
-        # "nginx")
-        #     manage_files_per_size $1 "/var/log/abhijit/nginx/" $nginx_size
-        #     # manage_files_per_days
-        #     ;;
+        "nginx")
+            nginx_dir = "/var/log/abhijit/nginx/"
+            manage_files_per_size $1 $nginx_dir $nginx_size
+            manage_files_per_days $1 $nginx_dir $nginx_days
+            ;;
         esac
 }
 
